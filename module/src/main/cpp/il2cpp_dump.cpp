@@ -330,21 +330,12 @@ void il2cpp_api_init(void *handle) {
         return;
     }
 
-    // Resolve the function dynamically
-   il2cpp_domain_get_assemblies = (const Il2CppAssembly** (*)(const Il2CppDomain*, size_t*))
-                                dlsym(handle, "il2cpp_domain_get_assemblies");
-
-    if (!il2cpp_domain_get_assemblies) {
-        LOGE("Failed to locate il2cpp_domain_get_assemblies!");
-        return;
-    }
-
     // Get IL2CPP base address
     Dl_info dlInfo;
-    if (dladdr((void *) il2cpp_domain_get_assemblies, &dlInfo)) {
-        il2cpp_base = reinterpret_cast<uint64_t>(dlInfo.dli_fbase);
-        LOGI("il2cpp_base: %" PRIx64"", il2cpp_base);
-    }
+    
+    il2cpp_base = reinterpret_cast<uint64_t>(dlInfo.dli_fbase);
+    LOGI("il2cpp_base: %" PRIx64"", il2cpp_base);
+   
 
     // Ensure VM is initialized before proceeding
     while (!il2cpp_is_vm_thread(nullptr)) {
