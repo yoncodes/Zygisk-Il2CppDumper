@@ -2,6 +2,10 @@
 // Created by Perfare on 2020/7/4.
 //
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "il2cpp_dump.h"
 #include <dlfcn.h>
 #include <chrono>
@@ -18,29 +22,24 @@
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
 
-static uint64_t il2cpp_base = 0;
-
 struct il2cppString : Il2CppObject // Credits: il2cpp resolver (https://github.com/sneakyevil/IL2CPP_Resolver/blob/main/Unity/Structures/System_String.hpp)
 {
     int m_iLength;
     wchar_t m_wString[1024];
 
-    void Clear()
-    {
-        if (!this) return;
-
-        memset(m_wString, 0, static_cast<size_t>(m_iLength) * 2);
-        m_iLength = 0;
-    }
-
     std::string ToString()
     {
-        if (!this) return "";
-
+    #ifdef _WIN32
         std::string sRet(static_cast<size_t>(m_iLength) * 3 + 1, '\0');
         WideCharToMultiByte(CP_UTF8, 0, m_wString, m_iLength, &sRet[0], static_cast<int>(sRet.size()), 0, 0);
         return sRet;
-    }
+    #else
+        // On Android, convert wide string manually (using std::wstring_convert)
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.to_bytes(m_wString);
+    #endif
+}
+
 };
 
 
