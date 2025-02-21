@@ -322,8 +322,6 @@ std::string dump_type(const Il2CppType *type) {
     return outPut.str();
 }
 
-typedef Il2CppAssembly** (*il2cpp_domain_get_assemblies_t)(Il2CppDomain*, size_t*);
-
 extern il2cpp_domain_get_assemblies_t il2cpp_domain_get_assemblies;
 
 void il2cpp_api_init(void *handle) {
@@ -335,7 +333,7 @@ void il2cpp_api_init(void *handle) {
     }
 
     // Resolve the function dynamically
-    il2cpp_domain_get_assemblies = (il2cpp_domain_get_assemblies_t) dlsym(handle, "il2cpp_domain_get_assemblies");
+   il2cpp_domain_get_assemblies = (il2cpp_domain_get_assemblies_t) dlsym(handle, "il2cpp_domain_get_assemblies");
 
     if (!il2cpp_domain_get_assemblies) {
         LOGE("Failed to locate il2cpp_domain_get_assemblies!");
