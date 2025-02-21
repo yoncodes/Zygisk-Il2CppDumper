@@ -18,6 +18,32 @@
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
 
+static uint64_t il2cpp_base = 0;
+
+struct il2cppString : Il2CppObject // Credits: il2cpp resolver (https://github.com/sneakyevil/IL2CPP_Resolver/blob/main/Unity/Structures/System_String.hpp)
+{
+    int m_iLength;
+    wchar_t m_wString[1024];
+
+    void Clear()
+    {
+        if (!this) return;
+
+        memset(m_wString, 0, static_cast<size_t>(m_iLength) * 2);
+        m_iLength = 0;
+    }
+
+    std::string ToString()
+    {
+        if (!this) return "";
+
+        std::string sRet(static_cast<size_t>(m_iLength) * 3 + 1, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, m_wString, m_iLength, &sRet[0], static_cast<int>(sRet.size()), 0, 0);
+        return sRet;
+    }
+};
+
+
 #define DO_API(r, n, p) r (*n) p
 
 #include "il2cpp-api-functions.h"
