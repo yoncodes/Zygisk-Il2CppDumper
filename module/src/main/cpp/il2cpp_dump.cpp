@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <cstdlib>
 #include <cinttypes>
 #include <string>
 #include <vector>
@@ -34,11 +35,18 @@ struct il2cppString : Il2CppObject // Credits: il2cpp resolver (https://github.c
         WideCharToMultiByte(CP_UTF8, 0, m_wString, m_iLength, &sRet[0], static_cast<int>(sRet.size()), 0, 0);
         return sRet;
     #else
-        // On Android, convert wide string manually (using std::wstring_convert)
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        return converter.to_bytes(m_wString);
+        // On Android/Linux, use wcstombs for conversion
+        size_t length = wcstombs(nullptr, m_wString, 0);
+        if (length == (size_t)-1) {
+            return "[Invalid UTF-16]";
+        }
+
+        std::string sRet(length, '\0');
+        wcstombs(&sRet[0], m_wString, length);
+        return sRet;
     #endif
 }
+
 
 };
 
@@ -193,100 +201,87 @@ std::string dump_method(Il2CppClass* klass) {
     outPut << "\n\t// Methods\n\n";
     void* iter = nullptr;
 
-    try {
-        while (auto method = il2cpp_class_get_methods(klass, &iter)) {
-            if (!method) {
-                LOGE("Invalid method encountered, skipping.");
-                outPut << "\t// Skipping invalid method\n";
-                continue;
-            }
-
-            if (method->methodPointer) {
-                outPut << "\t// RVA: 0x";
-                outPut << std::hex << (uint64_t)method->methodPointer - il2cpp_base;
-                outPut << " VA: 0x";
-                outPut << std::hex << (uint64_t)method->methodPointer;
-            }
-            else {
-                outPut << "\t// RVA: 0x VA: 0x0";
-            }
-            outPut << "\n\t";
-
-            uint32_t iflags = 0;
-            auto flags = il2cpp_method_get_flags(method, &iflags);
-            outPut << get_method_modifier(flags);
-
-            auto return_type = il2cpp_method_get_return_type(method);
-            if (!return_type) {
-                LOGE("Failed to get return type for method: %s", il2cpp_method_get_name(method));
-                outPut << "/* Unknown Return Type */ ";
-                continue;
-            }
-
-            if (_il2cpp_type_is_byref(return_type)) {
-                outPut << "ref ";
-            }
-
-            outPut << GetFullType(return_type) << " " << il2cpp_method_get_name(method) << "(";
-
-            auto param_count = il2cpp_method_get_param_count(method);
-            for (int i = 0; i < (int)param_count; ++i) {
-                auto param = il2cpp_method_get_param(method, i);
-                if (!param) {
-                    LOGE("Failed to get parameter %d for method: %s", i, il2cpp_method_get_name(method));
-                    continue;
-                }
-
-                auto attrs = param->attrs;
-                if (_il2cpp_type_is_byref(param)) {
-                    if (attrs & PARAM_ATTRIBUTE_OUT && !(attrs & PARAM_ATTRIBUTE_IN)) {
-                        outPut << "out ";
-                    }
-                    else if (attrs & PARAM_ATTRIBUTE_IN && !(attrs & PARAM_ATTRIBUTE_OUT)) {
-                        outPut << "in ";
-                    }
-                    else {
-                        outPut << "ref ";
-                    }
-                }
-                else {
-                    if (attrs & PARAM_ATTRIBUTE_IN) {
-                        outPut << "[In] ";
-                    }
-                    if (attrs & PARAM_ATTRIBUTE_OUT) {
-                        outPut << "[Out] ";
-                    }
-                }
-
-                auto parameter_class = il2cpp_class_from_type(param);
-                if (!parameter_class) {
-                    LOGE("Failed to resolve parameter class for method: %s", il2cpp_method_get_name(method));
-                    outPut << "UnknownType";
-                }
-                else {
-                    if (param->type == IL2CPP_TYPE_GENERICINST) {
-                        outPut << GetFullType(param);
-                    }
-                    else {
-                        outPut << il2cpp_class_get_name(parameter_class);
-                    }
-                }
-
-                outPut << " " << il2cpp_method_get_param_name(method, i) << ", ";
-            }
-
-            if (param_count > 0) {
-                outPut.seekp(-2, outPut.cur); // Remove the trailing comma and space
-            }
-            outPut << ") { }\n\n";
+    while (true) {
+        auto method = il2cpp_class_get_methods(klass, &iter);
+        if (!method) {
+            break;  // No more methods to process
         }
-    }
-    catch (const std::exception& ex) {
-        LOGE("Exception occurred while dumping methods: %s", ex.what());
+
+        if (!method->methodPointer) {
+            outPut << "\t// RVA: 0x VA: 0x0\n";
+        } else {
+            outPut << "\t// RVA: 0x" << std::hex 
+                   << (uint64_t)method->methodPointer - il2cpp_base 
+                   << " VA: 0x" << (uint64_t)method->methodPointer << "\n";
+        }
+
+        uint32_t iflags = 0;
+        auto flags = il2cpp_method_get_flags(method, &iflags);
+        outPut << get_method_modifier(flags);
+
+        auto return_type = il2cpp_method_get_return_type(method);
+        if (!return_type) {
+            LOGE("Failed to get return type for method: %s", il2cpp_method_get_name(method));
+            outPut << "/* Unknown Return Type */ ";
+            continue;
+        }
+
+        if (_il2cpp_type_is_byref(return_type)) {
+            outPut << "ref ";
+        }
+
+        outPut << GetFullType(return_type) << " " << il2cpp_method_get_name(method) << "(";
+
+        auto param_count = il2cpp_method_get_param_count(method);
+        for (int i = 0; i < (int)param_count; ++i) {
+            auto param = il2cpp_method_get_param(method, i);
+            if (!param) {
+                LOGE("Failed to get parameter %d for method: %s", i, il2cpp_method_get_name(method));
+                continue;
+            }
+
+            auto attrs = param->attrs;
+            if (_il2cpp_type_is_byref(param)) {
+                if (attrs & PARAM_ATTRIBUTE_OUT && !(attrs & PARAM_ATTRIBUTE_IN)) {
+                    outPut << "out ";
+                } else if (attrs & PARAM_ATTRIBUTE_IN && !(attrs & PARAM_ATTRIBUTE_OUT)) {
+                    outPut << "in ";
+                } else {
+                    outPut << "ref ";
+                }
+            } else {
+                if (attrs & PARAM_ATTRIBUTE_IN) {
+                    outPut << "[In] ";
+                }
+                if (attrs & PARAM_ATTRIBUTE_OUT) {
+                    outPut << "[Out] ";
+                }
+            }
+
+            auto parameter_class = il2cpp_class_from_type(param);
+            if (!parameter_class) {
+                LOGE("Failed to resolve parameter class for method: %s", il2cpp_method_get_name(method));
+                outPut << "UnknownType";
+            } else {
+                if (param->type == IL2CPP_TYPE_GENERICINST) {
+                    outPut << GetFullType(param);
+                } else {
+                    outPut << il2cpp_class_get_name(parameter_class);
+                }
+            }
+
+            outPut << " " << il2cpp_method_get_param_name(method, i);
+            if (i < (int)param_count - 1) {
+                outPut << ", ";
+            }
+        }
+
+        outPut << ") { }\n\n";
     }
 
     return outPut.str();
 }
+
 
 std::string dump_property(Il2CppClass *klass) {
     std::stringstream outPut;
@@ -537,6 +532,7 @@ void il2cpp_dump(const char *outDir) {
     auto domain = il2cpp_domain_get();
     auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
     std::stringstream imageOutput;
+    std::stringstream imageList;
     std::vector<std::string> outPuts;
 
     // Dynamically generate the image list at the top
@@ -560,7 +556,7 @@ void il2cpp_dump(const char *outDir) {
             for (int j = 0; j < classCount; ++j) {
                 Il2CppClass* klass = const_cast<Il2CppClass*>(il2cpp_image_get_class(image, j));
                 if (!klass) {
-                    LOGD("Class at index %zu is null.", j);
+                    LOGD("Class at index %zu is null.", (size_t)j);
                     continue;
                 }
 
@@ -618,14 +614,19 @@ void il2cpp_dump(const char *outDir) {
         }
     }
     LOGI("write dump file");
+
     auto outPath = std::string(outDir).append("/files/dump.cs");
     std::ofstream outStream(outPath);
+
+    outStream << imageList.str() << "\n";
+    
     outStream << imageOutput.str();
     auto count = outPuts.size();
     for (int i = 0; i < count; ++i) {
         outStream << outPuts[i];
     }
     outStream.close();
+    
     auto EndTimer = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> Timer = EndTimer - StartTimer;
     LOGI("Dumping complete! Took %f seconds.", Timer.count());
