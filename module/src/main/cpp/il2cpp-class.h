@@ -126,7 +126,15 @@ typedef struct Il2CppType {
 
 typedef struct MethodInfo {
     Il2CppMethodPointer methodPointer;
+    void* invoker_method;
+    const char* name;
+    Il2CppClass* declaring_type;
+    const Il2CppType* return_type;
+    const Il2CppType** parameters;
+    uint16_t parameter_count;
+    uint32_t flags;
 } MethodInfo;
+
 
 typedef struct Il2CppObject {
     union {
@@ -142,3 +150,19 @@ typedef struct Il2CppArray {
     il2cpp_array_size_t max_length;
     void *vector[32];
 } Il2CppArray;
+
+typedef struct Il2CppGenericClass {
+    void* type;                  // Generic class type information
+    Il2CppClass* cached_class;    // Resolved class
+} Il2CppGenericClass;
+
+typedef struct Il2CppGenericInst {
+    uint32_t type_argc;          // Number of generic arguments
+    Il2CppType** type_argv;      // Array of type arguments
+} Il2CppGenericInst;
+
+typedef struct Il2CppException {
+    Il2CppObject object;
+    Il2CppString *message;
+    Il2CppString *stack_trace;
+} Il2CppException;
