@@ -151,20 +151,19 @@ typedef struct Il2CppArray {
     void *vector[32];
 } Il2CppArray;
 
-typedef struct Il2CppGenericClass {
-    void* type;                  // Generic class type information
-    Il2CppClass* cached_class;    // Pointer to resolved class
-    struct {
-        Il2CppGenericInst* class_inst;   // Generic type instance
-        Il2CppGenericInst* method_inst;  // Generic method instance
-    } context;  // Ensure this is present
-} Il2CppGenericClass;
-
-
 typedef struct Il2CppGenericInst {
     uint32_t type_argc;          // Number of generic arguments
     Il2CppType** type_argv;      // Array of type arguments
 } Il2CppGenericInst;
+
+typedef struct Il2CppGenericClass {
+    void* type;                  
+    Il2CppClass* cached_class;    
+    struct {
+        Il2CppGenericInst* class_inst;   // Generic type instance
+        Il2CppGenericInst* method_inst;  // Generic method instance
+    } context;
+} Il2CppGenericClass;
 
 typedef struct Il2CppException {
     Il2CppObject object;
