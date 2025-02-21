@@ -4,7 +4,6 @@
 
 #include "hack.h"
 #include "il2cpp_dump.h"
-#include "il2cpp-api-functions.h"
 #include "log.h"
 #include "xdl.h"
 #include <cstring>
@@ -37,25 +36,6 @@ void hack_start(const char *game_data_dir) {
     }
 
     il2cpp_api_init(handle);
-
-    // Check if il2cpp_domain_get_assemblies is actually loaded
-    if (!il2cpp_domain_get_assemblies) {
-        LOGW("Waiting for il2cpp_domain_get_assemblies...");
-
-        for (int i = 0; i < 10; i++) {  // Try for 10 more seconds
-            sleep(1);
-            il2cpp_domain_get_assemblies = (decltype(il2cpp_domain_get_assemblies)) dlsym(handle, "il2cpp_domain_get_assemblies");
-            if (il2cpp_domain_get_assemblies) {
-                LOGI("il2cpp_domain_get_assemblies found!");
-                break;
-            }
-        }
-    }
-
-    if (!il2cpp_domain_get_assemblies) {
-        LOGE("Failed to initialize il2cpp api.");
-        return;
-    }
 
     LOGI("Dumping IL2CPP to %s", game_data_dir);
     il2cpp_dump(game_data_dir);
