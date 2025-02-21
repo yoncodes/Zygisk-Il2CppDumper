@@ -321,7 +321,6 @@ std::string dump_type(const Il2CppType *type) {
     outPut << "}\n";
     return outPut.str();
 }
-
 void il2cpp_api_init(void *handle) {
     LOGI("il2cpp_handle: %p", handle);
 
@@ -330,22 +329,46 @@ void il2cpp_api_init(void *handle) {
         return;
     }
 
-    // Get IL2CPP base address
+    // Get IL2CPP base address properly
     Dl_info dlInfo;
-    
-    il2cpp_base = reinterpret_cast<uint64_t>(dlInfo.dli_fbase);
-    LOGI("il2cpp_base: %" PRIx64"", il2cpp_base);
-   
+    if (dladdr((void*)handle, &dlInfo)) {
+        il2cpp_base = reinterpret_cast<uint64_t>(dlInfo.dli_fbase);
+        LOGI("il2cpp_base: %" PRIx64"", il2cpp_base);
+    } else {
+        LOGE("Failed to get IL2CPP base address");
+        return;
+    }
+
+    // Check if il2cpp_is_vm_thread exists
+    if (!il2cpp_is_vm_thread) {
+        LOGE("il2cpp_is_vm_thread not found!");
+        return;
+    }
 
     // Ensure VM is initialized before proceeding
     while (!il2cpp_is_vm_thread(nullptr)) {
         LOGI("Waiting for il2cpp_init...");
-        sleep(1);
+        sleep(2);
     }
 
+    // Check if il2cpp_domain_get() exists
+    if (!il2cpp_domain_get) {
+        LOGE("il2cpp_domain_get not found!");
+        return;
+    }
+
+    // Get IL2CPP domain
     auto domain = il2cpp_domain_get();
+    if (!domain) {
+        LOGE("Failed to get IL2CPP domain!");
+        return;
+    }
+
+    // Attach to IL2CPP thread
     il2cpp_thread_attach(domain);
+    LOGI("Successfully attached to IL2CPP thread.");
 }
+
 
 
 void il2cpp_dump(const char *outDir) {
