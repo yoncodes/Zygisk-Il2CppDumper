@@ -5,7 +5,6 @@
 #include "il2cpp_dump.h"
 #include <dlfcn.h>
 #include <cstdlib>
-#include <chrono>
 #include <cstring>
 #include <cinttypes>
 #include <string>
@@ -345,25 +344,16 @@ void il2cpp_api_init(void *handle) {
 }
 
 void il2cpp_dump(const char *outDir) {
-    LOGI("Starting dump...");
-    auto StartTimer = std::chrono::high_resolution_clock::now();
-
+    LOGI("dumping...");
     size_t size;
     auto domain = il2cpp_domain_get();
     auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
     std::stringstream imageOutput;
-    std::stringstream imageList;
-    std::vector<std::string> outPuts;
-
-    // Dynamically generate the image list at the top
-    for (size_t i = 0; i < size; ++i) {
+    for (int i = 0; i < size; ++i) {
         auto image = il2cpp_assembly_get_image(assemblies[i]);
-        const char* imageName = il2cpp_image_get_name(image);
-        uintptr_t imageAddress = reinterpret_cast<uintptr_t>(image);
-
-        imageList << "// Image " << i << ": " << imageName << "\n";
+        imageOutput << "// Image " << i << ": " << il2cpp_image_get_name(image) << "\n";
     }
-
+    std::vector<std::string> outPuts;
     if (il2cpp_image_get_class) {
         LOGI("Version greater than 2018.3");
         //使用il2cpp_image_get_class
@@ -372,19 +362,12 @@ void il2cpp_dump(const char *outDir) {
             std::stringstream imageStr;
             imageStr << "\n// Dll : " << il2cpp_image_get_name(image);
             auto classCount = il2cpp_image_get_class_count(image);
-
             for (int j = 0; j < classCount; ++j) {
-                Il2CppClass* klass = const_cast<Il2CppClass*>(il2cpp_image_get_class(image, j));
-                if (!klass) {
-                    LOGD("Class at index %zu is null.", (size_t)j);
-                    continue;
-                }
-
+                auto klass = il2cpp_image_get_class(image, j);
                 auto type = il2cpp_class_get_type(const_cast<Il2CppClass *>(klass));
-                LOGD("type name : %s", il2cpp_type_get_name(type));
+                //LOGD("type name : %s", il2cpp_type_get_name(type));
                 auto outPut = imageStr.str() + dump_type(type);
                 outPuts.push_back(outPut);
-
             }
         }
     } else {
@@ -434,20 +417,13 @@ void il2cpp_dump(const char *outDir) {
         }
     }
     LOGI("write dump file");
-
     auto outPath = std::string(outDir).append("/files/dump.cs");
     std::ofstream outStream(outPath);
-
-    outStream << imageList.str() << "\n";
-    
     outStream << imageOutput.str();
     auto count = outPuts.size();
     for (int i = 0; i < count; ++i) {
         outStream << outPuts[i];
     }
     outStream.close();
-    
-    auto EndTimer = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> Timer = EndTimer - StartTimer;
-    LOGI("Dumping complete! Took %f seconds.", Timer.count());
+    LOGI("dump done!");
 }
