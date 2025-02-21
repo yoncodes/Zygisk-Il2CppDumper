@@ -331,7 +331,8 @@ void il2cpp_api_init(void *handle) {
     }
 
     // Resolve the function dynamically
-   il2cpp_domain_get_assemblies = (const Il2CppAssembly** (*)(const Il2CppDomain*, size_t*)) dlsym(handle, "il2cpp_domain_get_assemblies");
+   il2cpp_domain_get_assemblies = (const Il2CppAssembly** (*)(const Il2CppDomain*, size_t*))
+                                dlsym(handle, "il2cpp_domain_get_assemblies");
 
     if (!il2cpp_domain_get_assemblies) {
         LOGE("Failed to locate il2cpp_domain_get_assemblies!");
