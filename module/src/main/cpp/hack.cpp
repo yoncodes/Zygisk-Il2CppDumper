@@ -4,6 +4,7 @@
 
 #include "hack.h"
 #include "il2cpp_dump.h"
+#include "il2cpp-api-functions.h"
 #include "log.h"
 #include "xdl.h"
 #include <cstring>
