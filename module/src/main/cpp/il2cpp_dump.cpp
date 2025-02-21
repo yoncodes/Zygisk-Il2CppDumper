@@ -2,16 +2,11 @@
 // Created by Perfare on 2020/7/4.
 //
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 #include "il2cpp_dump.h"
 #include <dlfcn.h>
+#include <cstdlib>
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
-#include <cstdlib>
 #include <cinttypes>
 #include <string>
 #include <vector>
@@ -22,34 +17,6 @@
 #include "log.h"
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
-
-struct il2cppString : Il2CppObject // Credits: il2cpp resolver (https://github.com/sneakyevil/IL2CPP_Resolver/blob/main/Unity/Structures/System_String.hpp)
-{
-    int m_iLength;
-    wchar_t m_wString[1024];
-
-    std::string ToString()
-    {
-    #ifdef _WIN32
-        std::string sRet(static_cast<size_t>(m_iLength) * 3 + 1, '\0');
-        WideCharToMultiByte(CP_UTF8, 0, m_wString, m_iLength, &sRet[0], static_cast<int>(sRet.size()), 0, 0);
-        return sRet;
-    #else
-        // On Android/Linux, use wcstombs for conversion
-        size_t length = wcstombs(nullptr, m_wString, 0);
-        if (length == (size_t)-1) {
-            return "[Invalid UTF-16]";
-        }
-
-        std::string sRet(length, '\0');
-        wcstombs(&sRet[0], m_wString, length);
-        return sRet;
-    #endif
-}
-
-
-};
-
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -118,72 +85,6 @@ std::string get_method_modifier(uint32_t flags) {
     return outPut.str();
 }
 
-std::string GetFullType(const Il2CppType* type) {
-    if (!type) {
-        LOGE("[ERROR] Null Il2CppType pointer passed to GetFullType.");
-        return "UnknownType";
-    }
-
-    // If the type is generic, handle it explicitly
-    if (type->type == IL2CPP_TYPE_GENERICINST) {
-        Il2CppGenericClass* genericClass = type->data.generic_class;
-
-        if (!genericClass || !genericClass->cached_class) {
-            LOGE("[ERROR] Null generic class or cached class in generic type.");
-            return "InvalidGenericType";
-        }
-
-        std::string result = il2cpp_class_get_name(genericClass->cached_class);
-        if (result.empty()) {
-            LOGE("[ERROR] Failed to get class name for generic type.");
-            return "UnnamedGenericType";
-        }
-
-        size_t backtickPos = result.find('`');
-        if (backtickPos != std::string::npos) {
-            result = result.substr(0, backtickPos);
-        }
-
-        result += "<";
-        const Il2CppGenericInst* classInst = genericClass->context.class_inst;
-        if (classInst) {
-            for (uint32_t i = 0; i < classInst->type_argc; ++i) {
-                const Il2CppType* argType = classInst->type_argv[i];
-                result += argType ? GetFullType(argType) : "UnknownType";
-
-                if (i < classInst->type_argc - 1) {
-                    result += ", ";
-                }
-            }
-        }
-        else {
-            LOGE("[ERROR] Null class instance for generic type.");
-            result += "UnknownType";
-        }
-
-        result += ">";
-        return result;
-    }
-
-    // Fallback for non-generic types
-    Il2CppClass* typeClass = il2cpp_class_from_type(type);
-    if (typeClass) {
-        const char* typeName = il2cpp_type_get_name(type);
-        return typeName ? std::string(typeName) : "Unknown";
-    }
-
-    LOGE("[ERROR] Failed to resolve class from Il2CppType.");
-    return "UnknownType";
-}
-
-
-std::string Field_ReturnType(FieldInfo* field)
-{
-    auto field_type = il2cpp_field_get_type(field);
-    auto field_class = il2cpp_class_from_type(field_type);
-    return std::string(il2cpp_class_get_name(field_class));
-}
-
 bool _il2cpp_type_is_byref(const Il2CppType *type) {
     auto byref = type->byref;
     if (il2cpp_type_is_byref) {
@@ -192,54 +93,38 @@ bool _il2cpp_type_is_byref(const Il2CppType *type) {
     return byref;
 }
 
-std::string dump_method(Il2CppClass* klass) {
-    if (!klass) {
-        return "\t// Invalid class pointer\n";
-    }
-
+std::string dump_method(Il2CppClass *klass) {
     std::stringstream outPut;
-    outPut << "\n\t// Methods\n\n";
-    void* iter = nullptr;
-
-    while (true) {
-        auto method = il2cpp_class_get_methods(klass, &iter);
-        if (!method) {
-            break;  // No more methods to process
-        }
-
-        if (!method->methodPointer) {
-            outPut << "\t// RVA: 0x VA: 0x0\n";
+    outPut << "\n\t// Methods\n";
+    void *iter = nullptr;
+    while (auto method = il2cpp_class_get_methods(klass, &iter)) {
+        //TODO attribute
+        if (method->methodPointer) {
+            outPut << "\t// RVA: 0x";
+            outPut << std::hex << (uint64_t) method->methodPointer - il2cpp_base;
+            outPut << " VA: 0x";
+            outPut << std::hex << (uint64_t) method->methodPointer;
         } else {
-            outPut << "\t// RVA: 0x" << std::hex 
-                   << (uint64_t)method->methodPointer - il2cpp_base 
-                   << " VA: 0x" << (uint64_t)method->methodPointer << "\n";
+            outPut << "\t// RVA: 0x VA: 0x0";
         }
-
+        /*if (method->slot != 65535) {
+            outPut << " Slot: " << std::dec << method->slot;
+        }*/
+        outPut << "\n\t";
         uint32_t iflags = 0;
         auto flags = il2cpp_method_get_flags(method, &iflags);
         outPut << get_method_modifier(flags);
-
+        //TODO genericContainerIndex
         auto return_type = il2cpp_method_get_return_type(method);
-        if (!return_type) {
-            LOGE("Failed to get return type for method: %s", il2cpp_method_get_name(method));
-            outPut << "/* Unknown Return Type */ ";
-            continue;
-        }
-
         if (_il2cpp_type_is_byref(return_type)) {
             outPut << "ref ";
         }
-
-        outPut << GetFullType(return_type) << " " << il2cpp_method_get_name(method) << "(";
-
+        auto return_class = il2cpp_class_from_type(return_type);
+        outPut << il2cpp_class_get_name(return_class) << " " << il2cpp_method_get_name(method)
+               << "(";
         auto param_count = il2cpp_method_get_param_count(method);
-        for (int i = 0; i < (int)param_count; ++i) {
+        for (int i = 0; i < param_count; ++i) {
             auto param = il2cpp_method_get_param(method, i);
-            if (!param) {
-                LOGE("Failed to get parameter %d for method: %s", i, il2cpp_method_get_name(method));
-                continue;
-            }
-
             auto attrs = param->attrs;
             if (_il2cpp_type_is_byref(param)) {
                 if (attrs & PARAM_ATTRIBUTE_OUT && !(attrs & PARAM_ATTRIBUTE_IN)) {
@@ -257,31 +142,19 @@ std::string dump_method(Il2CppClass* klass) {
                     outPut << "[Out] ";
                 }
             }
-
             auto parameter_class = il2cpp_class_from_type(param);
-            if (!parameter_class) {
-                LOGE("Failed to resolve parameter class for method: %s", il2cpp_method_get_name(method));
-                outPut << "UnknownType";
-            } else {
-                if (param->type == IL2CPP_TYPE_GENERICINST) {
-                    outPut << GetFullType(param);
-                } else {
-                    outPut << il2cpp_class_get_name(parameter_class);
-                }
-            }
-
-            outPut << " " << il2cpp_method_get_param_name(method, i);
-            if (i < (int)param_count - 1) {
-                outPut << ", ";
-            }
+            outPut << il2cpp_class_get_name(parameter_class) << " "
+                   << il2cpp_method_get_param_name(method, i);
+            outPut << ", ";
         }
-
-        outPut << ") { }\n\n";
+        if (param_count > 0) {
+            outPut.seekp(-2, outPut.cur);
+        }
+        outPut << ") { }\n";
+        //TODO GenericInstMethod
     }
-
     return outPut.str();
 }
-
 
 std::string dump_property(Il2CppClass *klass) {
     std::stringstream outPut;
@@ -322,25 +195,13 @@ std::string dump_property(Il2CppClass *klass) {
     return outPut.str();
 }
 
-#define INIT_CONST_FIELD(type) \
-        outPut << " = ";        \
-        type data;               \
-		il2cpp_field_static_get_value(field, &data)
-
-#define FieldIs(typeName) FieldType == typeName
-
-#define INIT_CONST_NUMBER_FIELD(type, typeName, stdtype) \
-        if (FieldIs(typeName)) {                          \
-            INIT_CONST_FIELD(type);                        \
-            outPut << stdtype << data;                      \
-        }
-
 std::string dump_field(Il2CppClass *klass) {
     std::stringstream outPut;
     outPut << "\n\t// Fields\n";
     auto is_enum = il2cpp_class_is_enum(klass);
     void *iter = nullptr;
     while (auto field = il2cpp_class_get_fields(klass, &iter)) {
+        //TODO attribute
         outPut << "\t";
         auto attrs = il2cpp_field_get_flags(field);
         auto access = attrs & FIELD_ATTRIBUTE_FIELD_ACCESS_MASK;
@@ -374,63 +235,22 @@ std::string dump_field(Il2CppClass *klass) {
         }
         auto field_type = il2cpp_field_get_type(field);
         auto field_class = il2cpp_class_from_type(field_type);
-        outPut << GetFullType(field_type) << " " << il2cpp_field_get_name(field);
+        outPut << il2cpp_class_get_name(field_class) << " " << il2cpp_field_get_name(field);
+        //TODO 获取构造函数初始化后的字段值
         if (attrs & FIELD_ATTRIBUTE_LITERAL && is_enum) {
             uint64_t val = 0;
             il2cpp_field_static_get_value(field, &val);
             outPut << " = " << std::dec << val;
         }
-
-        if (il2cpp_field_is_literal(field)) { // field_is_const
-            std::string FieldType = Field_ReturnType(field);
-
-            if (FieldIs("String")) {
-                INIT_CONST_FIELD(il2cppString*);
-                if (data != nullptr) {
-                    std::string skibidi = data->ToString().c_str();
-                    if (skibidi.size() == 1) {
-                        outPut << "'" << skibidi.c_str() << "'";
-                    }
-                    else {
-                        outPut << "\"" << skibidi.c_str() << "\"";
-                    }
-                }
-            }
-
-            if (FieldIs("Boolean")) {
-                INIT_CONST_FIELD(bool);
-                if (data) outPut << "true";
-                else outPut << "false";
-            }
-
-            INIT_CONST_NUMBER_FIELD(int16_t, "Int16", std::dec)
-            INIT_CONST_NUMBER_FIELD(int, "Int32", std::dec)
-            INIT_CONST_NUMBER_FIELD(int64_t, "Int64", std::dec)
-
-            INIT_CONST_NUMBER_FIELD(double, "Double", std::showpoint)
-            INIT_CONST_NUMBER_FIELD(float, "Single", std::showpoint)
-
-            INIT_CONST_NUMBER_FIELD(int16_t, "UInt16", std::dec)
-            INIT_CONST_NUMBER_FIELD(uint32_t, "UInt32", std::dec)
-            INIT_CONST_NUMBER_FIELD(int64_t, "UInt64", std::dec)
-        }
-
         outPut << "; // 0x" << std::hex << il2cpp_field_get_offset(field) << "\n";
     }
     return outPut.str();
 }
 
 std::string dump_type(const Il2CppType *type) {
-    if (!type) {
-        return "// Invalid type pointer\n";
-    }
-
     std::stringstream outPut;
-
     auto *klass = il2cpp_class_from_type(type);
-
     outPut << "\n// Namespace: " << il2cpp_class_get_namespace(klass) << "\n";
-
     auto flags = il2cpp_class_get_flags(klass);
     if (flags & TYPE_ATTRIBUTE_SERIALIZABLE) {
         outPut << "[Serializable]\n";
